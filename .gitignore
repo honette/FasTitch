@@ -1,12 +1,8 @@
 .venv/
 .venv_win/
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
 dist/
 build/
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/

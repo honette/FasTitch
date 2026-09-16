@@ -1,18 +1,62 @@
-# FasJoin
+# FasTitch
 
 複数画像を横に連結し、高さを1枚目に揃え、結果が 16:9 より横長にならないよう各画像の左右をトリムするアプリ。Windows 11 向け。
 
-**まだ未実装。** 仕様の正は `IDEA.txt`。このフォルダごと別リポジトリに移して実装する想定。
+仕様の正は `IDEA.txt`。
 
-## 実装時の環境（予定）
+## 必要環境
 
-FasTrim と同じ。
+- Python 3.10 以降
+- Windows では Git Bash（Git for Windows）
 
-- Python 3.10 以降 + PySide6 + Pillow
-- UI 文言は英語
-- Linux 用 venv は `.venv`、Windows 用は `.venv_win`（混ぜない）
-- Windows のコマンドは Git Bash 前提
-  `python -m venv .venv_win` → `source .venv_win/Scripts/activate`
-- `.exe` は Windows 上の PyInstaller のみ（Linux からクロスコンパイルしない）
+venv は OS をまたげません。Linux 用は `.venv`、Windows 用は `.venv_win` です。
 
-コードが入ったら、ここにインストールと起動手順を書く。
+## インストール（Linux / macOS）
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## インストール（Windows / Git Bash）
+
+```bash
+python -m venv .venv_win
+source .venv_win/Scripts/activate
+pip install -r requirements.txt
+```
+
+## 起動
+
+venv を activate した状態で:
+
+```bash
+python -m fastitch
+```
+
+または `./run.sh`
+
+画像ファイルのパスを引数に渡せます。
+
+```bash
+python -m fastitch a.jpg b.jpg c.jpg
+```
+
+## テスト
+
+```bash
+pip install pytest
+python -m pytest
+```
+
+## exe 化（Windows / Git Bash）
+
+Linux からは作れません。venv を activate した Git Bash で:
+
+```bash
+pip install pyinstaller
+pyinstaller fastitch.spec
+```
+
+`dist/FasTitch.exe` ができます。
