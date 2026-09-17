@@ -112,3 +112,119 @@ def test_save_collision_uses_number(qapp: QApplication, tmp_path: Path) -> None:
     assert (tmp_path / "shot_stitched.png").exists()
     assert (tmp_path / "shot_stitched_2.png").exists()
     window.close()
+
+
+def test_copy_button_copies_stitched_image(qapp: QApplication, tmp_path: Path) -> None:
+    a = _png(tmp_path / "a.png", 40, 100, (255, 0, 0))
+    b = _png(tmp_path / "b.png", 80, 100, (0, 255, 0))
+    window = MainWindow(Settings(last_dir=str(tmp_path), output_format="png"))
+    window.add_paths([a, b])
+    assert window.copy_btn.isEnabled()
+    assert window.copy_act.isEnabled()
+
+    window.copy_btn.click()
+    qapp.processEvents()
+
+    from PySide6.QtGui import QGuiApplication
+
+    clipboard = QGuiApplication.clipboard()
+    assert clipboard is not None
+    image = clipboard.image()
+    assert (image.width(), image.height()) == (120, 100)
+    assert image.pixelColor(0, 0).red() == 255
+    assert image.pixelColor(119, 99).green() == 255
+    assert "Copied" in window.msg_label.text()
+    window.close()
+
+
+def test_copy_disabled_when_error(qapp: QApplication, tmp_path: Path) -> None:
+    wide = _png(tmp_path / "wide.png", 2000, 900, (1, 2, 3))
+    window = MainWindow(Settings(last_dir=str(tmp_path)))
+    window.add_paths([wide])
+    assert window._error is not None
+    assert not window.copy_btn.isEnabled()
+    assert not window.copy_act.isEnabled()
+    window.copy_result()
+    assert "Copied" not in window.msg_label.text()
+    window.close()
+
+
+def test_row_delete_button_removes_item(qapp: QApplication, tmp_path: Path) -> None:
+    a = _png(tmp_path / "one.png", 40, 100, (255, 0, 0))
+    b = _png(tmp_path / "two.png", 80, 100, (0, 255, 0))
+    window = MainWindow(Settings(last_dir=str(tmp_path), output_format="png"))
+    window.add_paths([a, b])
+    assert window.list.count() == 2
+
+    row = window.list.itemWidget(window.list.item(0))
+    assert row is not None
+    row.remove_btn.click()
+    qapp.processEvents()
+
+    assert window.list.count() == 1
+    assert [item.path.name for item in window._items] == ["two.png"]
+    assert window._result is not None
+    assert window._result.size == (80, 100)
+    window.close()
+
+
+def test_row_delete_button_matches_remove_selected(qapp: QApplication, tmp_path: Path) -> None:
+    a = _png(tmp_path / "one.png", 40, 100, (255, 0, 0))
+    b = _png(tmp_path / "two.png", 80, 100, (0, 255, 0))
+    window = MainWindow(Settings(last_dir=str(tmp_path), output_format="png"))
+    window.add_paths([a, b])
+    window.list.setCurrentRow(1)
+    window.remove_selected()
+    expected = [(item.path.name, item.key) for item in window._items]
+    window.clear_items()
+
+    window.add_paths([a, b])
+    row = window.list.itemWidget(window.list.item(1))
+    row.remove_btn.click()
+    qapp.processEvents()
+
+    assert [(item.path.name, item.key) for item in window._items] == expected
+    assert window.list.count() == 1
+    assert window.list.currentRow() == 0
+    window.close()
+
+
+def test_delete_key_removes_current_item(qapp: QApplication, tmp_path: Path) -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeyEvent
+
+    a = _png(tmp_path / "one.png", 40, 100, (255, 0, 0))
+    b = _png(tmp_path / "two.png", 80, 100, (0, 255, 0))
+    window = MainWindow(Settings(last_dir=str(tmp_path), output_format="png"))
+    window.add_paths([a, b])
+    window.list.setCurrentRow(0)
+    window.list.keyPressEvent(
+        QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier)
+    )
+    qapp.processEvents()
+    assert [item.path.name for item in window._items] == ["two.png"]
+    window.close()
+
+
+def test_row_is_compact(qapp: QApplication, tmp_path: Path) -> None:
+    a = _png(tmp_path / "one.png", 40, 100, (255, 0, 0))
+    window = MainWindow(Settings(last_dir=str(tmp_path), output_format="png"))
+    window.add_paths([a])
+    row = window.list.itemWidget(window.list.item(0))
+    assert row is not None
+    assert row.remove_btn.width() <= 16 and row.remove_btn.height() <= 16
+    assert row.sizeHint().width() - row.thumb.width() <= 120
+    assert window.list.item(0).sizeHint().height() <= 96
+    window.close()
+
+
+def test_delete_icon_is_an_x(qapp: QApplication, tmp_path: Path) -> None:
+    from fastitch.app import make_delete_icon
+
+    image = make_delete_icon(64).pixmap(64, 64).toImage()
+    assert image.pixelColor(32, 32).alpha() > 40
+    assert image.pixelColor(6, 32).alpha() == 0
+    assert image.pixelColor(58, 32).alpha() == 0
+    assert image.pixelColor(32, 6).alpha() == 0
+    assert image.pixelColor(32, 58).alpha() == 0
+    assert image.pixelColor(0, 0).alpha() == 0

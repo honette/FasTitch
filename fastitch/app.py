@@ -6,7 +6,17 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import QLocale, QSize, QStandardPaths, Qt, QUrl, Signal
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QDesktopServices,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QPixmap,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -21,6 +31,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QStatusBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -33,7 +44,7 @@ from fastitch.dnd import dropped_image_paths
 from fastitch.geom import StitchError, StitchPlan
 from fastitch.imageops import collect_image_paths, ext_for_format, is_image_file, load_image, render_stitch, save_image
 from fastitch.naming import example_name, next_dest_path
-from fastitch.preview import PreviewView, pil_to_qpixmap
+from fastitch.preview import PreviewView, copy_to_clipboard, pil_to_qpixmap
 from fastitch.theme import apply_theme, make_app_icon
 
 THUMB_SIZE = 96
@@ -46,9 +57,60 @@ class StitchItem:
     key: str
 
 
+REMOVE_ICON_SIZE = 14
+REMOVE_BTN_SIZE = 16
+
+
+def make_delete_icon(size: int = REMOVE_ICON_SIZE) -> QIcon:
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    pen = QPen(QColor("#e8e8e8"), max(1.3, size / 9))
+    pen.setCapStyle(Qt.RoundCap)
+    painter.setPen(pen)
+    inset = size * 0.3
+    painter.drawLine(int(inset), int(inset), int(size - inset), int(size - inset))
+    painter.drawLine(int(size - inset), int(inset), int(inset), int(size - inset))
+    painter.end()
+    return QIcon(pixmap)
+
+
+class ThumbRow(QWidget):
+    removed = Signal()
+
+    def __init__(self, icon: QIcon, text: str, tooltip: str, parent=None) -> None:  # noqa: ANN001
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.thumb = QLabel()
+        self.thumb.setPixmap(icon.pixmap(QSize(THUMB_SIZE, THUMB_SIZE)))
+        self.thumb.setFixedSize(THUMB_SIZE, THUMB_SIZE)
+        self.thumb.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.thumb)
+        self.name = QLabel(text)
+        self.name.setWordWrap(True)
+        self.name.setContentsMargins(6, 0, 0, 0)
+        self.name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        layout.addWidget(self.name, 1)
+        self.remove_btn = QToolButton()
+        self.remove_btn.setObjectName("thumbRemoveBtn")
+        self.remove_btn.setIcon(make_delete_icon())
+        self.remove_btn.setIconSize(QSize(REMOVE_ICON_SIZE, REMOVE_ICON_SIZE))
+        self.remove_btn.setAutoRaise(True)
+        self.remove_btn.setCursor(Qt.PointingHandCursor)
+        self.remove_btn.setToolTip("Remove")
+        self.remove_btn.setFixedSize(REMOVE_BTN_SIZE, REMOVE_BTN_SIZE)
+        self.remove_btn.clicked.connect(self.removed)
+        layout.addWidget(self.remove_btn, 0, Qt.AlignVCenter)
+        self.setToolTip(tooltip)
+
+
 class ThumbList(QListWidget):
     orderChanged = Signal()
     filesDropped = Signal(object)
+    removeRequested = Signal(str)
 
     def __init__(self, parent=None) -> None:  # noqa: ANN001
         super().__init__(parent)
@@ -82,6 +144,21 @@ class ThumbList(QListWidget):
             return
         super().dropEvent(event)
         self.orderChanged.emit()
+
+    def keyPressEvent(self, event) -> None:  # noqa: ANN001
+        if event.key() in (Qt.Key_Delete,):
+            key = self._current_key()
+            if key:
+                self.removeRequested.emit(key)
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+    def _current_key(self) -> str:
+        item = self.currentItem()
+        if item is None:
+            return ""
+        return str(item.data(Qt.UserRole) or "")
 
 
 class MainWindow(QMainWindow):
@@ -131,6 +208,11 @@ class MainWindow(QMainWindow):
         self.save_act.setShortcut(QKeySequence.Save)
         self.save_act.triggered.connect(self.save_result)
         file_menu.addAction(self.save_act)
+
+        self.copy_act = QAction("&Copy image", self)
+        self.copy_act.setShortcut(QKeySequence("Ctrl+Shift+C"))
+        self.copy_act.triggered.connect(self.copy_result)
+        file_menu.addAction(self.copy_act)
 
         folder_act = QAction("Open &folder", self)
         folder_act.triggered.connect(self.open_current_folder)
@@ -205,6 +287,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.remove_btn)
         layout.addWidget(clear_btn)
         layout.addStretch(1)
+        self.copy_btn = QPushButton("Copy")
+        self.copy_btn.setToolTip("Copy the stitched image to the clipboard")
+        self.copy_btn.clicked.connect(self.copy_result)
+        layout.addWidget(self.copy_btn)
         self.save_btn = QPushButton("Save")
         self.save_btn.setObjectName("cropSaveBtn")
         self.save_btn.clicked.connect(self.save_result)
@@ -224,6 +310,7 @@ class MainWindow(QMainWindow):
         self.list = ThumbList()
         self.list.orderChanged.connect(self._on_order_changed)
         self.list.filesDropped.connect(self.add_paths)
+        self.list.removeRequested.connect(self.remove_key)
         self.list.currentRowChanged.connect(self._update_actions)
         layout.addWidget(self.list, 1)
         return side
@@ -291,10 +378,14 @@ class MainWindow(QMainWindow):
     def _append_list_item(self, item: StitchItem) -> None:
         thumb = item.image.copy()
         thumb.thumbnail((THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
-        list_item = QListWidgetItem(QIcon(pil_to_qpixmap(thumb)), item.path.name)
+        list_item = QListWidgetItem()
         list_item.setData(Qt.UserRole, item.key)
         list_item.setToolTip(str(item.path))
         self.list.addItem(list_item)
+        row = ThumbRow(QIcon(pil_to_qpixmap(thumb)), item.path.name, str(item.path))
+        row.removed.connect(lambda key=item.key: self.remove_key(key))
+        list_item.setSizeHint(row.sizeHint())
+        self.list.setItemWidget(list_item, row)
 
     def _on_order_changed(self) -> None:
         by_key = {item.key: item for item in self._items}
@@ -322,8 +413,20 @@ class MainWindow(QMainWindow):
         row = self.list.currentRow()
         if row < 0 or row >= len(self._items):
             return
+        self._remove_row(row)
+
+    def remove_key(self, key: str) -> None:
+        for row, item in enumerate(self._items):
+            if item.key == key:
+                self._remove_row(row)
+                return
+
+    def _remove_row(self, row: int) -> None:
+        if not (0 <= row < self.list.count()):
+            return
         self.list.takeItem(row)
-        del self._items[row]
+        if 0 <= row < len(self._items):
+            del self._items[row]
         if self.list.count():
             self.list.setCurrentRow(min(row, self.list.count() - 1))
         self._rebuild()
@@ -398,8 +501,18 @@ class MainWindow(QMainWindow):
         can_save = self._result is not None and self._error is None
         self.remove_btn.setEnabled(has_sel)
         self.remove_act.setEnabled(has_sel)
+        self.copy_btn.setEnabled(can_save)
         self.save_btn.setEnabled(can_save)
         self.save_act.setEnabled(can_save)
+        self.copy_act.setEnabled(can_save)
+
+    def copy_result(self) -> None:
+        if self._result is None or self._error:
+            return
+        if copy_to_clipboard(self._result):
+            self.msg_label.setText(f"Copied {self._result.width}x{self._result.height} to clipboard")
+        else:
+            self.msg_label.setText("Could not copy to clipboard")
 
     def save_result(self) -> None:
         if self._error:

@@ -93,6 +93,7 @@ class ShortcutsDialog(QDialog):
                     "Ctrl+O            Open images (replace list)",
                     "Ctrl+Shift+O      Add images",
                     "Ctrl+S            Save",
+                    "Ctrl+Shift+C      Copy image to clipboard",
                     "Delete            Remove selected",
                     "Ctrl+Up / Down    Move selected",
                     "Drop files        Append to list",

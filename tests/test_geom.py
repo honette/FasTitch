@@ -2,7 +2,6 @@ import pytest
 
 from fastitch.geom import (
     MSG_FIRST_TOO_WIDE,
-    MSG_TOO_NARROW,
     StitchError,
     center_crop_box,
     is_wider_than_16_9,
@@ -84,9 +83,32 @@ def test_first_too_wide() -> None:
         plan_stitch([(200, 100), (50, 100)])
 
 
-def test_too_narrow_for_equal_slot() -> None:
-    with pytest.raises(StitchError, match="narrow"):
-        plan_stitch([(160, 90), (10, 90)])
+def test_narrow_image_is_not_trimmed() -> None:
+    plan = plan_stitch([(160, 90), (10, 90)])
+    assert plan.trimmed
+    assert plan.panel_widths == (80, 10)
+    assert plan.output_width == 90
+    assert not is_wider_than_16_9(plan.output_width, plan.height)
+
+
+def test_narrow_image_keeps_its_full_width() -> None:
+    plan = plan_stitch([(160, 90), (10, 90)])
+    assert plan.panels[1].crop == (0, 0, 10, 90)
+
+
+def test_narrow_image_is_not_dropped_at_thin_width() -> None:
+    plan = plan_stitch([(160, 90), (3, 90)])
+    assert plan.trimmed
+    assert plan.panel_widths == (80, 3)
+    assert plan.output_width == 83
+
+
+def test_equal_images_trim_to_slot() -> None:
+    plan = plan_stitch([(90, 100), (90, 100)])
+    assert plan.trimmed
+    assert plan.panel_widths == (88, 88)
+    assert plan.output_width == 176
+    assert not is_wider_than_16_9(plan.output_width, plan.height)
 
 
 def test_empty_and_invalid() -> None:
@@ -107,4 +129,3 @@ def test_scale_other_images_to_first_height() -> None:
 
 def test_error_messages_are_stable() -> None:
     assert "16:9" in MSG_FIRST_TOO_WIDE
-    assert "narrow" in MSG_TOO_NARROW

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from fastitch.geom import StitchError, max_width_for_height
+from fastitch.geom import StitchError, is_wider_than_16_9, max_width_for_height
 from fastitch.imageops import (
     collect_image_paths,
     ext_for_format,
@@ -56,9 +56,15 @@ def test_first_too_wide_raises() -> None:
         render_stitch([_rgb(2000, 900)])
 
 
-def test_too_narrow_raises() -> None:
-    with pytest.raises(StitchError, match="narrow"):
-        render_stitch([_rgb(160, 90), _rgb(10, 90)])
+def test_narrow_image_is_not_trimmed() -> None:
+    wide = _rgb(160, 90, (255, 0, 0))
+    narrow = _rgb(10, 90, (0, 255, 0))
+    out, plan = render_stitch([wide, narrow])
+    assert plan.trimmed
+    assert out.size == (90, 90)
+    assert out.getpixel((0, 0)) == (255, 0, 0)
+    assert out.getpixel((85, 45)) == (0, 255, 0)
+    assert not is_wider_than_16_9(out.width, 90)
 
 
 def test_rgba_canvas_when_any_alpha() -> None:

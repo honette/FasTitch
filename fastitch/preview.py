@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PIL import Image
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QLabel
 
 from fastitch.dnd import dropped_image_paths
@@ -23,6 +23,16 @@ def pil_to_qpixmap(image: Image.Image) -> QPixmap:
             QImage.Format_RGBA8888,
         )
     return QPixmap.fromImage(qimage.copy())
+
+
+def copy_to_clipboard(image: Image.Image) -> bool:
+    clipboard = QGuiApplication.clipboard()
+    if clipboard is None:
+        return False
+    pixmap = pil_to_qpixmap(image)
+    clipboard.setPixmap(pixmap)
+    clipboard.setImage(pixmap.toImage())
+    return True
 
 
 class PreviewView(QGraphicsView):

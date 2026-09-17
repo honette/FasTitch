@@ -76,6 +76,14 @@ def apply_theme(app: QApplication) -> None:
         QListWidget::item { padding: 6px 8px; }
         QListWidget::item:selected { background: #0e639c; color: #ffffff; }
         QListWidget::item:hover { background: #3e3e42; }
+        QToolButton#thumbRemoveBtn {
+            background: transparent;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+        QToolButton#thumbRemoveBtn:hover { background: #c42b1c; border-radius: 3px; }
+        QToolButton#thumbRemoveBtn:pressed { background: #8f1f14; }
         QStatusBar { background: #007acc; color: #ffffff; }
         QStatusBar QLabel { color: #ffffff; padding: 0 8px; }
         QComboBox, QSpinBox, QLineEdit {

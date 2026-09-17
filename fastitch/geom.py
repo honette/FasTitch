@@ -7,7 +7,6 @@ from fastitch.constants import RATIO_H, RATIO_W
 MSG_EMPTY = "No images."
 MSG_INVALID = "Image has invalid size."
 MSG_FIRST_TOO_WIDE = "The first image is wider than 16:9. Choose a different first image."
-MSG_TOO_NARROW = "One or more images are too narrow to fit 16:9 as equal-width panels."
 
 
 class StitchError(ValueError):
@@ -93,11 +92,16 @@ def plan_stitch(sizes: list[tuple[int, int]]) -> StitchPlan:
 
     count = len(scaled_widths)
     slot = max_width_for_height(height) // count
-    if slot < 1:
-        raise StitchError(MSG_TOO_NARROW)
-    for sw in scaled_widths:
-        if sw < slot:
-            raise StitchError(MSG_TOO_NARROW)
+    if slot == 0:
+        panels = tuple(
+            Panel(sw, (0, 0, sw, height)) for sw in scaled_widths
+        )
+        return StitchPlan(height, panels, total, False)
 
-    panels = tuple(Panel(sw, center_crop_box(sw, height, slot)) for sw in scaled_widths)
-    return StitchPlan(height, panels, slot * count, True)
+    trimmed: list[Panel] = []
+    output_width = 0
+    for sw in scaled_widths:
+        crop_width = min(slot, sw)
+        trimmed.append(Panel(sw, center_crop_box(sw, height, crop_width)))
+        output_width += crop_width
+    return StitchPlan(height, tuple(trimmed), output_width, True)
