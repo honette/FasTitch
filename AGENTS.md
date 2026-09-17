@@ -54,11 +54,12 @@ Lint / 整形 / CI は作らない。cmd / PowerShell 向け手順は書かな�
 - Windows 作業は Git Bash。activate は `source .venv_win/Scripts/activate`
 - `.exe` は Windows でだけ固める
 - ウィンドウタイトルは `FasTitch`
+- アイコンは `assets/FasTitch.ico`（+ `assets/icon.png`）。タスクバーと exe は ico、実行時は `theme.asset_path` が PyInstaller の `_MEIPASS` も見る。デザイン変更時は `fastitch.theme.make_app_icon` の描画と揃える
 
 ## 注意
 
 - `IDEA.txt` の「決まってないこと」を、確認なしに製品仕様へしない
 - 設定は `%APPDATA%/FasTitch/settings.json`（Windows）または `~/.config/fastitch/settings.json`。退避先は環境変数 `FASTITCH_CONFIG_DIR`。`tests/conftest.py` がテスト中に一時ディレクトリへ向ける
 - 同 conftest が `QT_QPA_PLATFORM=offscreen` をセットする
-- `dist/` `build/` `.venv/` `.venv_win/` は生成物。コミットしない
+- `dist/` `build/` `.venv/` `.venv_win/` は生成物。コミットしない。`assets/` はコミットする
 - エージェント向け指示は `AGENTS.md` のみ。`CLAUDE.md` / `.cursorrules` / `.github/copilot-instructions.md` などは作らない
